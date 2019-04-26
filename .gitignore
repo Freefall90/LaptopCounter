@@ -1,0 +1,4 @@
+#Ignore board & schematic revisions from Eagle
+*.s#?
+*.b#?
+
