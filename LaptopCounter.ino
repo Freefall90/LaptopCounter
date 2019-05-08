@@ -193,7 +193,7 @@ void drawNumber(int wholeNumber)
   int ones = 0;
 
   //Figure out the value of each place
-  for(int i = 0; i < 4; i++)
+  for(int i = 0; i < 3; i++)
   {
     values[i] = wholeNumber % 10;
     wholeNumber /= 10;
@@ -213,11 +213,15 @@ void drawRow(int valueArray[])
   {
     if(i != 3)
     {
-      digitalWrite(DIG2[i % 4], numberArray[valueArray[0], i]);
+      digitalWrite(DIG2[i % 4], numberArray[valueArray[2], i]);
       digitalWrite(DIG3[i % 4], numberArray[valueArray[1], i]);
+      Serial.print("Value: ");
+      Serial.print(valueArray[0]);
+      Serial.print(valueArray[1]);
+      Serial.println(valueArray[2]);
     }
     if(i != 7)
-      digitalWrite(DIG4[i % 4], numberArray[valueArray[2], i]);
+      digitalWrite(DIG4[i % 4], numberArray[valueArray[0], i]);
 
     if(i < 4)
     {
@@ -229,7 +233,9 @@ void drawRow(int valueArray[])
       digitalWrite(TOP_ROW, LOW);
       digitalWrite(BOT_ROW, HIGH);
     }
-
+    delay(500);
+    delayMicroseconds(100);
+    turnAllOff();
   }
 }
 
