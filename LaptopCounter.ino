@@ -199,6 +199,7 @@ void drawNumber(int wholeNumber)
   }
 
   drawRow(values);
+
 }
 
 //Drawing a row of LEDs at once
@@ -233,8 +234,11 @@ void drawRow(int valueArray[])
   //  Serial.print("Segment value: ");
   //  Serial.println(numberArray[1][i]);
     //delay(500);
-    delayMicroseconds(700);
-    turnAllOff();
+    if(i % 4 == 3)
+    {
+      delayMicroseconds(500);
+      turnAllOff();
+    }
   }
 }
 
