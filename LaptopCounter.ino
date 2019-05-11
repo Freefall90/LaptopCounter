@@ -26,16 +26,25 @@
 const byte DIG1[] = {};
 const byte DIG2[] = {DIG2L, DIG2R, DIG2TB, DIG2M};
 const byte DIG3[] = {DIG3L, DIG3R, DIG3TB, DIG34M};
-const byte DIG4[] = {DIG4L, DIG4R, DIG4TB, DIG34M}; 
+const byte DIG4[] = {DIG4L, DIG4R, DIG4TB, DIG34M};
+const byte rows[2] = {TOP_ROW, BOT_ROW};
 
 Encoder dial(7, 6);
+tmElements_t tm;
+
+const char *monthName[12] = {
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+bool parse=false;
+bool config=false;
 
 //Order of segments is as follows:
 //In most cases, the middle segment should be specified twice (stupid LED configuration in my particular clock)
 //Also, it's common anode, so 0 is on and 1 is off
 //         3
-//      ------   
-//     |      | 
+//      ------
+//     |      |
 //  1  |   4  | 2
 //     |------|
 //     |   8  |
@@ -67,53 +76,73 @@ const int numberArray[10][8] = {  {0, 0, 0, 1, 0, 0, 0, 1}, //zero
                                   {0, 0, 0, 0, 0, 0, 0, 0}, //eight
                                   {0, 0, 0, 0, 1, 0, 1, 0} }; //nine
 
-int dayCount = 0;
+const int errorArray[2][8] = {    {0, 1, 0, 0, 0, 1, 0, 0}, //"E"
+                                  {1, 1, 1, 0, 0, 1, 1, 0}}; //"r"
+
+//This is basically a hack to use a number indexed array for displaying "Err"
+const int errorValues[3] = {1, 1, 0};
+
+int dayCount;
 int today;
 int yesterday;
 bool resetDay = false;
 
-void setup() 
+void setup()
 {
-    // Open serial port
-    Serial.begin(9600);
-    
-    while (!Serial) ; // wait until Arduino Serial Monitor opens
-    setSyncProvider(RTC.get);   // the function to get the time from the RTC
-    if(timeStatus()!= timeSet) 
-      Serial.println("Unable to sync with the RTC");
-    else
-      Serial.println("RTC has set the system time");      
+  // Set all used pins to OUTPUT
+  // This is very important! If the pins are set to input
+  // the display will be very dim.
 
-    // Set all used pins to OUTPUT
-    // This is very important! If the pins are set to input
-    // the display will be very dim.
+  pinMode(DIG1, OUTPUT);
+  pinMode(DIG2L, OUTPUT);
+  pinMode(DIG2R, OUTPUT);
+  pinMode(DIG2TB, OUTPUT);
+  pinMode(DIG2M, OUTPUT);
+  pinMode(DIG3L, OUTPUT);
+  pinMode(DIG3R, OUTPUT);
+  pinMode(DIG3TB, OUTPUT);
+  pinMode(DIG34M, OUTPUT);
+  pinMode(DIG4L, OUTPUT);
+  pinMode(DIG4R, OUTPUT);
+  pinMode(DIG4TB, OUTPUT);
 
-    pinMode(DIG1, OUTPUT);
-    pinMode(DIG2L, OUTPUT);
-    pinMode(DIG2R, OUTPUT);
-    pinMode(DIG2TB, OUTPUT);
-    pinMode(DIG2M, OUTPUT);
-    pinMode(DIG3L, OUTPUT);
-    pinMode(DIG3R, OUTPUT);
-    pinMode(DIG3TB, OUTPUT);
-    pinMode(DIG34M, OUTPUT);
-    pinMode(DIG4L, OUTPUT);
-    pinMode(DIG4R, OUTPUT);
-    pinMode(DIG4TB, OUTPUT);
+  pinMode(buttonPin, INPUT);
 
-//    pinMode(6, OUTPUT);
-//    pinMode(7, OUTPUT);
+  pinMode(TOP_ROW, OUTPUT);
+  pinMode(BOT_ROW, OUTPUT);
 
-    pinMode(buttonPin, INPUT);
-  //  pinMode(i, OUTPUT);
-    pinMode(TOP_ROW, OUTPUT);
-    pinMode(BOT_ROW, OUTPUT);
+  // Open serial port
+  Serial.begin(9600);
 
-//    int today = day();
-//    int yesterday = day() - 1;
-    today = day();
-    yesterday = day() - 1;
-    resetDay = false;
+  //while (!Serial) ; // wait until Arduino Serial Monitor opens
+  setSyncProvider(RTC.get);   // the function to get the time from the RTC
+  if(timeStatus()!= timeSet)
+  {
+    setTime();
+    Serial.println("Didn't have time from RTC. Setting...");
+  }
+  else
+  {
+    config = true;
+    Serial.println("Time synced with RTC");
+    Serial.println(config);
+  //  dayCount
+  }
+  if(!config)
+  {
+    Serial.println("Error: Cannot set time");
+    dayCount = 100; //force drawing all 3 digits
+    while(true)
+    {
+      drawRow(errorValues, errorArray);
+    }
+  }
+
+
+
+  today = day();
+  yesterday = day() - 1;
+  resetDay = false;
 }
 
 long positionDial = -999;
@@ -126,9 +155,16 @@ void loop()
     Serial.println("The time has not been set.  Please run the Time");
     Serial.println("TimeRTCSet example, or DS1307RTC SetTime example.");
     Serial.println();
-    delay(4000);
+    while (true)
+    {
+      drawRow(errorValues, errorArray);
+      delay(1000);
+      turnAllOff();
+      delay(500);
+    }
   }
 
+//Reset the day count when someone hits the button
   buttonState = digitalRead(buttonPin);
   if(buttonState == HIGH)
   {
@@ -140,8 +176,8 @@ void loop()
     dayCount = 0;
     resetDay = false;
   }
-  
-  
+
+
   //Set up button and dial functionality
   long newPos = dial.read();
   if(newPos - 3 >  positionDial || newPos + 3 < positionDial)
@@ -151,7 +187,7 @@ void loop()
 
     if(newPos > positionDial + 3){dayCount++;}
     if(newPos < positionDial - 3){dayCount--;}
-    
+
     positionDial = newPos;
   }
 
@@ -159,7 +195,7 @@ void loop()
   //today = day();
   //Test with minutes
   today = second();
-  
+
   if(today != yesterday + 1)
   {
     dayCount++;
@@ -168,10 +204,77 @@ void loop()
     Serial.println(dayCount);
   }
 
-  
 
-  
-  //TURN EVERYTHING OFF
+//TURNING OFF FOR NOW - THIS IS WHAT DISPLAYS THE NUMBER
+  drawNumber(dayCount); //testing
+
+}
+
+void drawNumber(int wholeNumber)
+{
+  int original = wholeNumber;
+  int values[3];
+  //int thousands = 0;
+  int hundreds = 0;
+  int tens = 0;
+  int ones = 0;
+
+  //Figure out the value of each place
+  for(int i = 0; i < 3; i++)
+  {
+    values[i] = wholeNumber % 10;
+    wholeNumber /= 10;
+  }
+
+  drawRow(values, numberArray);
+
+}
+
+//Drawing a row of LEDs at once
+//This helps with brightness by lighting up
+//multiple LEDs at once, rather than one at a time.
+void drawRow(int valueArray[], int charArray[][8])
+{
+  //Basically, we're going to loop through the values array and set all the
+  //LEDs for each bit
+  for(int i = 0; i < 8; i++)
+  {
+    if(i != 3)
+    {
+      if(dayCount > 99)
+        digitalWrite(DIG2[i % 4], charArray[valueArray[2]][i]);
+      if(dayCount > 9)
+        digitalWrite(DIG3[i % 4], charArray[valueArray[1]][i]);
+    }
+    if(i != 7)
+      digitalWrite(DIG4[i % 4], charArray[valueArray[0]][i]);
+
+    if(i < 4)
+    {
+      digitalWrite(TOP_ROW, HIGH);
+      digitalWrite(BOT_ROW, LOW);
+    }
+    else
+    {
+      digitalWrite(TOP_ROW, LOW);
+      digitalWrite(BOT_ROW, HIGH);
+    }
+  //  Serial.print("Loop: ");
+  //  Serial.println(i);
+  //  Serial.print("Segment value: ");
+  //  Serial.println(numberArray[1][i]);
+    //delay(500);
+    if(i % 4 == 3)
+    {
+      delay(2);
+      //delayMicroseconds(500);
+      turnAllOff();
+    }
+  }
+}
+
+void turnAllOff()
+{
   digitalWrite(TOP_ROW, LOW);
   digitalWrite(BOT_ROW, LOW);
 
@@ -187,120 +290,45 @@ void loop()
   digitalWrite(DIG4L, HIGH);
   digitalWrite(DIG4R, HIGH);
   digitalWrite(DIG4TB, HIGH);
-  
-
-//TURNING OFF FOR NOW - THIS IS WHAT DISPLAYS THE NUMBER
-//  drawNumber(dayCount);
-
-//  drawDigit(numberArray[(dayCount % 10)], DIG2);
-//  drawDigit(numberArray[(dayCount % 10)], DIG3);
-//  drawDigit(numberArray[(dayCount % 10)], DIG4);
-
 }
 
-void drawNumber(int wholeNumber)
+bool getTime(const char *str)
 {
-  int original = wholeNumber;
-  int values[4];
-  int thousands = 0;
-  int hundreds = 0;
-  int tens = 0;
-  int ones = 0;
+  int Hour, Min, Sec;
 
-  //Figure out the value of each place
-  for(int i = 0; i < 4; i++)
-  {
-    values[i] = wholeNumber % 10;
-    wholeNumber /= 10;
-  }
-  
-  //Thousands
-  if(original > 999)
-    drawDigit(numberArray[values[3]], DIG1);
-
-  //Hundreds
-  if(original > 99)
-    drawDigit(numberArray[values[2]], DIG2);
-
-  //Tens
-  if(original > 9)
-    drawDigit(numberArray[values[1]], DIG3);
-
-  //Ones
-  drawDigit(numberArray[values[0]], DIG4);
+  if (sscanf(str, "%d:%d:%d", &Hour, &Min, &Sec) != 3) return false;
+  tm.Hour = Hour;
+  tm.Minute = Min;
+  tm.Second = Sec;
+  return true;
 }
 
-
-void drawDigit(int number[], byte digit[])
+bool getDate(const char *str)
 {
-for (int j = 0; j < 8; j++)
-  {
-   // Serial.print("j=");
-   // Serial.print(j);
-   // Serial.println(number[j]);
+  char Month[12];
+  int Day, Year;
+  uint8_t monthIndex;
 
-   //Thousands case
-   //Super special case here, because the display can ONLY display a 1 in the thousands place
-   //Disabling. I need the IO pins, and we're never hitting 1000 days for this.
-  /* if(digit == DIG1)
-   {
-    digitalWrite(TOP_ROW, HIGH);
-    digitalWrite(BOT_ROW, LOW);
-    digitalWrite(DIG1A, LOW);
-    delayMicroseconds(100);
-    digitalWrite(TOP_ROW, LOW);
-    digitalWrite(BOT_ROW, HIGH);
-    delayMicroseconds(100);
-    digitalWrite(DIG1A, HIGH);
-    continue;
-   }
-   */
-
-    //Ones case
-    if(digit == DIG4 && j == 7) {break;}
-
-    //Tens and hundreds case
-    if((digit == DIG3 || digit == DIG2) && j == 3) {j++;}
-
-    if(j < 4)
-    {
-      digitalWrite(TOP_ROW, HIGH);
-      digitalWrite(BOT_ROW, LOW);
-    }
-    else
-    {
-      digitalWrite(TOP_ROW, LOW);
-      digitalWrite(BOT_ROW, HIGH);
-    }
-    digitalWrite(digit[j % 4], number[j]);
-    
-    delayMicroseconds(100);
-    //delay(1000);
-    
-    
-    digitalWrite(digit[j % 4], HIGH);
+  if (sscanf(str, "%s %d %d", Month, &Day, &Year) != 3) return false;
+  for (monthIndex = 0; monthIndex < 12; monthIndex++) {
+    if (strcmp(Month, monthName[monthIndex]) == 0) break;
   }
+  if (monthIndex >= 12) return false;
+  tm.Day = Day;
+  tm.Month = monthIndex + 1;
+  tm.Year = CalendarYrToTm(Year);
+  return true;
 }
 
-
-void digitalClockDisplay(){
-  // digital clock display of the time
-  Serial.print(hour());
-  printDigits(minute());
-  printDigits(second());
-  Serial.print(" ");
-  Serial.print(day());
-  Serial.print(" ");
-  Serial.print(month());
-  Serial.print(" ");
-  Serial.print(year()); 
-  Serial.println(); 
-}
-
-void printDigits(int digits){
-  // utility function for digital clock display: prints preceding colon and leading 0
-  Serial.print(":");
-  if(digits < 10)
-    Serial.print('0');
-  Serial.print(digits);
+void setTime()
+{
+  if (getDate(__DATE__) && getTime(__TIME__))
+  {
+    parse = true;
+    // and configure the RTC with this info
+    if (RTC.write(tm))
+    {
+      config = true;
+    }
+  }
 }
